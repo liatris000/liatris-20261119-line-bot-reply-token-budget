@@ -8,7 +8,7 @@ LLM を挟んだ LINE ボットで、受信からの経過時間を測って rep
 
 - `router.py` — 署名検証（`X-Line-Signature`）、`webhookEventId` による再送の重複排除、reply / push を切り替える `ReplyRouter`
 - `server.py` — webhook を受けて即 200 を返し、返信は別スレッドで作るサーバー。`generate_reply()` を LLM 呼び出しに差し替えて使う
-- `test_router.py` — 分岐ロジックのテスト（5 本）
+- `test_router.py` — 分岐ロジックのテスト（6 本）
 
 ## 動かす
 
@@ -27,4 +27,6 @@ REPLY_THRESHOLD_SEC=20 FAKE_LLM_DELAY_SEC=0 python3 server.py   # POST /callback
 
 閾値 20 秒は実測値ではなく仮置き。reply token の実際の寿命は測っていない。
 
-ログの `route=reply` / `route=push` / `route=reply_failed_then_push` を集計すると、閾値が攻めすぎか（`reply_failed_then_push` が出る）、慎重すぎるか（`push` ばかり）を判断できる。
+push に回すのは、LINE が reply を 4xx で拒否して未配信が確定したときだけ。タイムアウトや 5xx は届いた可能性があるので push せず、`route=reply_unknown` として記録する（二重送信を避けるため）。
+
+ログの `route=reply` / `route=push` / `route=reply_failed_then_push` / `route=reply_unknown` を集計すると、閾値が攻めすぎか（`reply_failed_then_push` が出る）、慎重すぎるか（`push` ばかり）を判断できる。

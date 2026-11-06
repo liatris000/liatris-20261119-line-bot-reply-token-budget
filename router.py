@@ -33,6 +33,10 @@ class EventDeduper:
         return True
 
 
+class ReplyRejected(Exception):
+    """LINE が reply を 4xx で拒否した (期限切れ・使用済みなど)。未配信が確定している。"""
+
+
 class ReplyRouter:
     """受信時刻からの経過秒が threshold_sec 未満なら reply、以上なら push。"""
 
@@ -41,7 +45,7 @@ class ReplyRouter:
         self.threshold_sec = threshold_sec
         self.clock = clock
         self.log = log
-        self.counts = {"reply": 0, "push": 0, "reply_failed_then_push": 0}
+        self.counts = {"reply": 0, "push": 0, "reply_failed_then_push": 0, "reply_unknown": 0}
 
     def respond(self, received_at: float, reply_token: str, user_id: str, text: str) -> str:
         elapsed = self.clock() - received_at
@@ -49,10 +53,13 @@ class ReplyRouter:
             try:
                 self.client.reply(reply_token, text)
                 return self._done("reply", elapsed)
-            except Exception as e:  # 期限切れ (400) 等。token は二度と使えないので push へ
-                self.log(f"reply failed after {elapsed:.1f}s: {e}")
+            except ReplyRejected as e:  # 未配信が確定。token は二度と使えないので push へ
+                self.log(f"reply rejected after {elapsed:.1f}s: {e}")
                 self.client.push(user_id, text)
                 return self._done("reply_failed_then_push", elapsed)
+            except Exception as e:  # タイムアウト・5xx 等。届いた可能性があるので push しない
+                self.log(f"reply result unknown after {elapsed:.1f}s: {e}")
+                return self._done("reply_unknown", elapsed)
         self.client.push(user_id, text)
         return self._done("push", elapsed)
 

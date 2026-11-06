@@ -10,10 +10,11 @@ import json
 import os
 import threading
 import time
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from router import EventDeduper, ReplyRouter, handle_webhook
+from router import EventDeduper, ReplyRejected, ReplyRouter, handle_webhook
 
 API = "https://api.line.me/v2/bot/message"
 CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
@@ -30,12 +31,18 @@ class LineClient:
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {ACCESS_TOKEN}"},
             method="POST",
         )
-        # 4xx / 5xx は urllib.error.HTTPError として送出され、ReplyRouter が push に回す
         with urllib.request.urlopen(req, timeout=10) as res:
             res.read()
 
     def reply(self, reply_token: str, text: str) -> None:
-        self._post("reply", {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]})
+        try:
+            self._post("reply", {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]})
+        except urllib.error.HTTPError as e:
+            # 4xx は LINE が受け付けなかった = 未配信が確定。5xx やタイムアウトは
+            # 配信済みの可能性があるのでそのまま送出し、ReplyRouter は push しない
+            if 400 <= e.code < 500:
+                raise ReplyRejected(f"{e.code}: {e.read().decode('utf-8', 'replace')}") from e
+            raise
 
     def push(self, to: str, text: str) -> None:
         self._post("push", {"to": to, "messages": [{"type": "text", "text": text}]})

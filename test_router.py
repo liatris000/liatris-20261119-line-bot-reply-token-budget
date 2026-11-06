@@ -4,7 +4,7 @@ import hmac
 import json
 import unittest
 
-from router import EventDeduper, ReplyRouter, handle_webhook
+from router import EventDeduper, ReplyRejected, ReplyRouter, handle_webhook
 
 SECRET = "test-secret"
 
@@ -55,12 +55,20 @@ class ReplyRouterTest(unittest.TestCase):
         self.assertEqual(client.sent, [("push", "U1", "ok")])
 
     def test_push_fallback_when_reply_fails(self):
-        client = FakeClient(reply_error=RuntimeError("400: Invalid reply token."))
+        client = FakeClient(reply_error=ReplyRejected("400: Invalid reply token."))
         router = make_router(client, now=105.0)
         route = router.respond(100.0, "rt-1", "U1", "ok")
         self.assertEqual(route, "reply_failed_then_push")
         self.assertEqual(client.sent, [("push", "U1", "ok")])
         self.assertEqual(router.counts["reply_failed_then_push"], 1)
+
+    def test_no_push_when_reply_result_unknown(self):
+        # 送信後にタイムアウトした reply は届いている可能性がある。push すると二重になる
+        client = FakeClient(reply_error=TimeoutError("timed out"))
+        router = make_router(client, now=105.0)
+        route = router.respond(100.0, "rt-1", "U1", "ok")
+        self.assertEqual(route, "reply_unknown")
+        self.assertEqual(client.sent, [])
 
 
 class HandleWebhookTest(unittest.TestCase):
