@@ -6,6 +6,7 @@ import hmac
 import json
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 
 
 def verify_signature(channel_secret: str, body: bytes, signature: str) -> bool:
@@ -75,7 +76,8 @@ def push_target(source: dict) -> str:
 
 
 def handle_webhook(body: bytes, signature: str, channel_secret: str, deduper: EventDeduper,
-                   dispatch, clock=time.monotonic) -> int:
+                   dispatch: Callable[[float, str, str, str], None],
+                   clock: Callable[[], float] = time.monotonic) -> int:
     """webhook 1 回分を処理して HTTP ステータスを返す。
 
     署名が不正なら 401。正しければテキストメッセージを dispatch に渡して 200。

@@ -14,16 +14,16 @@ class FakeClient:
         self.reply_error = reply_error
         self.sent = []
 
-    def reply(self, token, text):
+    def reply(self, token: str, text: str) -> None:
         if self.reply_error:
             raise self.reply_error
         self.sent.append(("reply", token, text))
 
-    def push(self, to, text):
+    def push(self, to: str, text: str) -> None:
         self.sent.append(("push", to, text))
 
 
-def make_router(client, now):
+def make_router(client: FakeClient, now: float) -> ReplyRouter:
     return ReplyRouter(client, threshold_sec=20.0, clock=lambda: now, log=lambda _msg: None)
 
 
@@ -42,19 +42,19 @@ def webhook_body(event_id: str) -> bytes:
 
 
 class ReplyRouterTest(unittest.TestCase):
-    def test_reply_when_within_threshold(self):
+    def test_reply_when_within_threshold(self) -> None:
         client = FakeClient()
         route = make_router(client, now=105.0).respond(100.0, "rt-1", "U1", "ok")
         self.assertEqual(route, "reply")
         self.assertEqual(client.sent, [("reply", "rt-1", "ok")])
 
-    def test_push_when_threshold_exceeded(self):
+    def test_push_when_threshold_exceeded(self) -> None:
         client = FakeClient()
         route = make_router(client, now=130.0).respond(100.0, "rt-1", "U1", "ok")
         self.assertEqual(route, "push")
         self.assertEqual(client.sent, [("push", "U1", "ok")])
 
-    def test_push_fallback_when_reply_fails(self):
+    def test_push_fallback_when_reply_fails(self) -> None:
         client = FakeClient(reply_error=ReplyRejected("400: Invalid reply token."))
         router = make_router(client, now=105.0)
         route = router.respond(100.0, "rt-1", "U1", "ok")
@@ -62,7 +62,7 @@ class ReplyRouterTest(unittest.TestCase):
         self.assertEqual(client.sent, [("push", "U1", "ok")])
         self.assertEqual(router.counts["reply_failed_then_push"], 1)
 
-    def test_no_push_when_reply_result_unknown(self):
+    def test_no_push_when_reply_result_unknown(self) -> None:
         # 送信後にタイムアウトした reply は届いている可能性がある。push すると二重になる
         client = FakeClient(reply_error=TimeoutError("timed out"))
         router = make_router(client, now=105.0)
@@ -72,7 +72,7 @@ class ReplyRouterTest(unittest.TestCase):
 
 
 class HandleWebhookTest(unittest.TestCase):
-    def test_redelivered_event_is_ignored(self):
+    def test_redelivered_event_is_ignored(self) -> None:
         calls = []
         deduper = EventDeduper()
         body = webhook_body("evt-1")
@@ -81,7 +81,7 @@ class HandleWebhookTest(unittest.TestCase):
             self.assertEqual(status, 200)
         self.assertEqual(len(calls), 1)
 
-    def test_invalid_signature_returns_401(self):
+    def test_invalid_signature_returns_401(self) -> None:
         calls = []
         body = webhook_body("evt-2")
         status = handle_webhook(body, "invalid", SECRET, EventDeduper(), lambda *a: calls.append(a))

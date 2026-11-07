@@ -61,7 +61,7 @@ route_lock = threading.Lock()  # 返信スレッド間で router.counts を守�
 
 
 def dispatch(received_at: float, reply_token: str, to: str, text: str) -> None:
-    def work():
+    def work() -> None:
         answer = generate_reply(text)
         with route_lock:
             router.respond(received_at, reply_token, to, answer)
@@ -70,7 +70,7 @@ def dispatch(received_at: float, reply_token: str, to: str, text: str) -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    def do_POST(self):
+    def do_POST(self) -> None:
         if self.path != "/callback":
             self.send_response(404)
             self.end_headers()

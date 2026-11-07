@@ -1,0 +1,57 @@
+# 成果物の CI(zenn_create の templates/artifact から入る)
+# README の 5 つの節が埋まっているか、テストと lint が通るかを確かめる。
+# 月に 1 回も回し、依存の更新で壊れていないかを見る。
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 0 1 * *"
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: README の節が埋まっているか
+        run: |
+          set -euo pipefail
+          for h in "## 前提" "## 動かし方" "## 期待される出力" "## 確かめていない範囲" "## 記事"; do
+            grep -qxF "$h" README.md || { echo "::error::README に「${h}」の節が無い"; exit 1; }
+          done
+          if grep -n '^TODO' README.md; then echo "::error::README に TODO が残っている"; exit 1; fi
+
+      - name: Python を用意する
+        if: hashFiles('requirements.txt', 'pyproject.toml') != '' || hashFiles('**/*.py') != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Python の lint とテスト
+        if: hashFiles('**/*.py') != ''
+        run: |
+          set -euo pipefail
+          python -m pip install -q --upgrade pip ruff
+          [ -f requirements.txt ] && python -m pip install -q -r requirements.txt
+          ruff check .
+          if ls tests/test_*.py test_*.py >/dev/null 2>&1; then
+            python -m pip install -q pytest
+            python -m pytest -q
+          fi
+
+      - name: Node を用意する
+        if: hashFiles('package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Node のテスト
+        if: hashFiles('package.json') != ''
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+          npm test --if-present

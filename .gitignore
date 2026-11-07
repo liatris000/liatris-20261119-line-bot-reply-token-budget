@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+
+# 実行で生成されるもの
+work/
+evidence/
+out/
+.next/
+
+# 環境
+.env
+.DS_Store
