@@ -38,7 +38,9 @@ jobs:
           python -m pip install -q --upgrade pip ruff
           [ -f requirements.txt ] && python -m pip install -q -r requirements.txt
           ruff check .
-          if ls tests/test_*.py test_*.py >/dev/null 2>&1; then
+          # tests/ の下でもルートでも、test_*.py が 1 つでもあればテストを流す
+          # (ls に 2 つの形を渡すと、片方が無いだけで失敗扱いになり、テストが飛ばされていた)
+          if find . -path ./node_modules -prune -o -path ./.venv -prune -o -name 'test_*.py' -print | grep -q .; then
             python -m pip install -q pytest
             python -m pytest -q
           fi
@@ -54,4 +56,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
-          npm test --if-present
+          # npm init が作る初期値の test スクリプト("no test specified" で必ず失敗する)は、テストが無いのと同じ扱いにする
+          if node -e 'const s=(require("./package.json").scripts||{}).test||""; process.exit(/no test specified/.test(s)?0:1)'; then
+            echo "test スクリプトは npm init の初期値のままなので飛ばす"
+          else
+            npm test --if-present
+          fi
